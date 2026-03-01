@@ -11,6 +11,7 @@ from pathlib import Path
 from flask import Flask, request, jsonify, send_file, abort
 
 app = Flask(__name__, static_folder="static")
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 DB_PATH = Path(os.environ.get("PHOTO_INDEX_DB", Path.home() / ".photo-indexer.db"))
 THUMB_DIR = Path(os.environ.get("PHOTO_INDEX_THUMBS", Path.home() / ".photo-indexer-thumbs"))
 FACE_THUMB_DIR = Path(os.environ.get("PHOTO_INDEX_FACE_THUMBS", Path.home() / ".photo-indexer-face-thumbs"))
@@ -19,7 +20,67 @@ FACE_THUMB_DIR = Path(os.environ.get("PHOTO_INDEX_FACE_THUMBS", Path.home() / ".
 def get_db():
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
+    db.execute("""CREATE TABLE IF NOT EXISTS schedules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        time_start TEXT,
+        time_end TEXT,
+        title TEXT NOT NULL,
+        color TEXT DEFAULT '#5b9bd5',
+        tagged_count INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now','localtime'))
+    )""")
     return db
+
+
+def auto_tag_schedule(db, schedule_id, date, time_start, time_end, title):
+    """매칭 사진에 title을 custom_tag로 추가, 태깅 수 반환"""
+    date_like = date.replace("-", ":") + "%"
+    conditions = ["date_taken LIKE ?"]
+    params = [date_like]
+
+    if time_start and time_end:
+        conditions.append("substr(date_taken, 12, 5) >= ?")
+        conditions.append("substr(date_taken, 12, 5) <= ?")
+        params.extend([time_start, time_end])
+    elif time_start:
+        conditions.append("substr(date_taken, 12, 5) >= ?")
+        params.append(time_start)
+    elif time_end:
+        conditions.append("substr(date_taken, 12, 5) <= ?")
+        params.append(time_end)
+
+    where = " AND ".join(conditions)
+    rows = db.execute(f"SELECT id, custom_tags FROM photos WHERE {where}", params).fetchall()
+
+    count = 0
+    for r in rows:
+        tags = json.loads(r["custom_tags"] or "[]")
+        if title not in tags:
+            tags.append(title)
+            db.execute("UPDATE photos SET custom_tags=? WHERE id=?",
+                       (json.dumps(tags, ensure_ascii=False), r["id"]))
+            count += 1
+
+    db.execute("UPDATE schedules SET tagged_count=? WHERE id=?", (count, schedule_id))
+    db.commit()
+    return count
+
+
+def remove_schedule_tag_from_photos(db, title):
+    """모든 사진에서 해당 title 태그 제거"""
+    rows = db.execute("SELECT id, custom_tags FROM photos WHERE custom_tags LIKE ?",
+                      (f'%"{title}"%',)).fetchall()
+    count = 0
+    for r in rows:
+        tags = json.loads(r["custom_tags"] or "[]")
+        if title in tags:
+            tags.remove(title)
+            db.execute("UPDATE photos SET custom_tags=? WHERE id=?",
+                       (json.dumps(tags, ensure_ascii=False), r["id"]))
+            count += 1
+    db.commit()
+    return count
 
 
 @app.route("/")
@@ -461,6 +522,138 @@ def serve_thumb(photo_id):
             return send_file(p)
 
     return send_file(thumb_path)
+
+
+# ── Photo counts per day (for calendar) ──────────────
+
+@app.route("/api/photo-counts")
+def api_photo_counts():
+    """월별 날짜별 사진 수 반환 (YYYY-MM 파라미터)"""
+    month = request.args.get("month", "").strip()
+    if not month:
+        return jsonify({})
+    # date_taken 형식: "YYYY:MM:DD HH:MM:SS" → LIKE "YYYY:MM:%"
+    month_like = month.replace("-", ":") + "%"
+    db = get_db()
+    rows = db.execute(
+        "SELECT substr(replace(date_taken,':','-'),1,10) as day, COUNT(*) as c "
+        "FROM photos WHERE date_taken LIKE ? GROUP BY day",
+        (month_like,),
+    ).fetchall()
+    db.close()
+    return jsonify({r["day"]: r["c"] for r in rows if r["day"]})
+
+
+# ── Schedules API ─────────────────────────────────────
+
+@app.route("/api/schedules")
+def api_schedules():
+    month = request.args.get("month", "").strip()  # YYYY-MM
+    db = get_db()
+    if month:
+        rows = db.execute(
+            "SELECT * FROM schedules WHERE date LIKE ? ORDER BY date, time_start",
+            (f"{month}%",),
+        ).fetchall()
+    else:
+        rows = db.execute("SELECT * FROM schedules ORDER BY date DESC, time_start").fetchall()
+    db.close()
+    return jsonify([{
+        "id": r["id"], "date": r["date"],
+        "time_start": r["time_start"], "time_end": r["time_end"],
+        "title": r["title"], "color": r["color"],
+        "tagged_count": r["tagged_count"],
+        "created_at": r["created_at"],
+    } for r in rows])
+
+
+@app.route("/api/schedules", methods=["POST"])
+def create_schedule():
+    data = request.get_json()
+    title = (data.get("title") or "").strip()
+    date = (data.get("date") or "").strip()
+    if not title or not date:
+        return jsonify({"error": "title and date are required"}), 400
+
+    time_start = (data.get("time_start") or "").strip() or None
+    time_end = (data.get("time_end") or "").strip() or None
+    color = (data.get("color") or "#5b9bd5").strip()
+
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO schedules (date, time_start, time_end, title, color) VALUES (?,?,?,?,?)",
+        (date, time_start, time_end, title, color),
+    )
+    schedule_id = cur.lastrowid
+    tagged = auto_tag_schedule(db, schedule_id, date, time_start, time_end, title)
+    db.close()
+    return jsonify({"id": schedule_id, "tagged_count": tagged})
+
+
+@app.route("/api/schedules/<int:sid>", methods=["PUT"])
+def update_schedule(sid):
+    db = get_db()
+    old = db.execute("SELECT * FROM schedules WHERE id=?", (sid,)).fetchone()
+    if not old:
+        db.close()
+        abort(404)
+
+    data = request.get_json()
+    title = (data.get("title") or "").strip() or old["title"]
+    date = (data.get("date") or "").strip() or old["date"]
+    time_start = data.get("time_start", old["time_start"])
+    time_end = data.get("time_end", old["time_end"])
+    color = (data.get("color") or old["color"]).strip()
+
+    if time_start is not None:
+        time_start = time_start.strip() if time_start else None
+    if time_end is not None:
+        time_end = time_end.strip() if time_end else None
+
+    # 제목 변경 시 구 태그 제거 → 신 태그 적용
+    old_title = old["title"]
+    if title != old_title:
+        remove_schedule_tag_from_photos(db, old_title)
+
+    db.execute(
+        "UPDATE schedules SET date=?, time_start=?, time_end=?, title=?, color=? WHERE id=?",
+        (date, time_start, time_end, title, color, sid),
+    )
+    db.commit()
+    tagged = auto_tag_schedule(db, sid, date, time_start, time_end, title)
+    db.close()
+    return jsonify({"id": sid, "tagged_count": tagged})
+
+
+@app.route("/api/schedules/<int:sid>", methods=["DELETE"])
+def delete_schedule(sid):
+    db = get_db()
+    row = db.execute("SELECT * FROM schedules WHERE id=?", (sid,)).fetchone()
+    if not row:
+        db.close()
+        abort(404)
+
+    remove_tags = request.args.get("remove_tags", "false").lower() == "true"
+    if remove_tags:
+        remove_schedule_tag_from_photos(db, row["title"])
+
+    db.execute("DELETE FROM schedules WHERE id=?", (sid,))
+    db.commit()
+    db.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/schedules/<int:sid>/auto-tag", methods=["POST"])
+def retag_schedule(sid):
+    db = get_db()
+    row = db.execute("SELECT * FROM schedules WHERE id=?", (sid,)).fetchone()
+    if not row:
+        db.close()
+        abort(404)
+
+    tagged = auto_tag_schedule(db, sid, row["date"], row["time_start"], row["time_end"], row["title"])
+    db.close()
+    return jsonify({"id": sid, "tagged_count": tagged})
 
 
 if __name__ == "__main__":
