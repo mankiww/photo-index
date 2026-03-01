@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+venv/
+env/
+photo-indexer-env/
+
+# Data / DB
+*.db
+*.db-wal
+*.db-shm
+
+# YOLO model
+*.pt
+
+# Thumbnails
+.photo-indexer-thumbs/
+.photo-indexer-face-thumbs/
+
+# DeepFace model cache
+.deepface/
+
+# Config (may contain local paths)
+.photo-indexer.conf
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
