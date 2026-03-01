@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Photo Index</title>
+<style>
+:root {
+  --bg: #0f0f0f;
+  --surface: #1a1a1a;
+  --surface2: #242424;
+  --border: #333;
+  --text: #e0e0e0;
+  --text2: #888;
+  --accent: #5b9bd5;
+  --accent2: #3a7bc0;
+  --tag-bg: #2a3a4a;
+  --tag-text: #8cc4ff;
+  --custom-tag-bg: #1a3a5a;
+  --custom-tag-text: #6db3f8;
+  --radius: 8px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* ── Header ── */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+header h1 span { color: var(--accent); }
+
+/* ── Tabs ── */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  margin-left: 24px;
+}
+
+.tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text2);
+  padding: 6px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover { color: var(--text); background: var(--surface2); }
+.tab-btn.active { color: var(--accent); border-color: var(--accent); background: rgba(91,155,213,0.1); }
+
+/* ── Layout ── */
+.container {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ── Search Bar ── */
+.search-bar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.search-fields {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+}
+
+.field label {
+  font-size: 11px;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.field input, .field select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 8px 12px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.field input:focus, .field select:focus {
+  border-color: var(--accent);
+}
+
+.field input { width: 170px; }
+
+/* ── Dropdown autocomplete ── */
+.dropdown-list {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0 0 6px 6px;
+  z-index: 50;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+
+.dropdown-list.open { display: block; }
+
+.dropdown-item {
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  transition: background 0.15s;
+}
+
+.dropdown-item:hover { background: var(--surface2); }
+.dropdown-item .count { color: var(--text2); font-size: 11px; }
+
+.btn {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover { background: var(--accent2); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+
+.btn-ghost:hover { background: var(--surface2); color: var(--text); }
+
+/* ── Stats Panel ── */
+.stats-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.stats-row {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.stat-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--text2);
+}
+
+/* ── Tags Cloud ── */
+.tags-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.tags-section h3 {
+  font-size: 12px;
+  color: var(--text2);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-chip {
+  background: var(--tag-bg);
+  color: var(--tag-text);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+  border: none;
+}
+
+.tag-chip:hover { background: #3a4f6a; }
+.tag-chip .count { opacity: 0.5; margin-left: 4px; }
+
+/* ── Results Info ── */
+.results-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  color: var(--text2);
+  font-size: 13px;
+}
+
+/* ── Grid ── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.15s;
+}
+
+.card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.card-img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+  background: var(--surface2);
+}
+
+.card-body {
+  padding: 10px 12px;
+}
+
+.card-filename {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-meta {
+  font-size: 11px;
+  color: var(--text2);
+  margin-bottom: 6px;
+}
+
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.card-tags span {
+  background: var(--tag-bg);
+  color: var(--tag-text);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.card-tags span.custom {
+  background: var(--custom-tag-bg);
+  color: var(--custom-tag-text);
+}
+
+/* ── Pagination ── */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding-bottom: 40px;
+}
+
+.pagination button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.pagination button:hover { background: var(--surface2); }
+.pagination button:disabled { opacity: 0.3; cursor: default; }
+.pagination .page-info { font-size: 13px; color: var(--text2); }
+
+/* ── Lightbox ── */
+.lightbox {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.92);
+  z-index: 200;
+  justify-content: center;
+  align-items: center;
+}
+
+.lightbox.active { display: flex; }
+
+.lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 32px;
+  cursor: pointer;
+  opacity: 0.7;
+  z-index: 210;
+}
+
+.lightbox-close:hover { opacity: 1; }
+
+.lightbox-content {
+  display: flex;
+  max-width: 95vw;
+  max-height: 95vh;
+  gap: 20px;
+  align-items: center;
+}
+
+.lightbox-img {
+  max-width: 70vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.lightbox-info {
+  width: 300px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 20px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.lightbox-info h3 {
+  font-size: 14px;
+  margin-bottom: 16px;
+  word-break: break-all;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.info-row .label { color: var(--text2); }
+
+/* ── Tag editor in lightbox ── */
+.tag-section-title {
+  margin-top: 14px;
+  font-size: 11px;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.info-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.info-tags .tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+}
+
+.info-tags .tag-pill.auto {
+  background: var(--tag-bg);
+  color: var(--tag-text);
+}
+
+.info-tags .tag-pill.custom {
+  background: var(--custom-tag-bg);
+  color: var(--custom-tag-text);
+}
+
+.info-tags .tag-pill .tag-remove {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  margin-left: 2px;
+  opacity: 0.6;
+  line-height: 1;
+}
+
+.info-tags .tag-pill .tag-remove:hover { opacity: 1; }
+
+.tag-add-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tag-add-row input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 12px;
+  outline: none;
+}
+
+.tag-add-row input:focus { border-color: var(--accent); }
+
+.tag-add-row button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ── Faces Grid ── */
+.faces-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.face-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.15s;
+  text-align: center;
+}
+
+.face-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.face-card img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+  background: var(--surface2);
+}
+
+.face-card .face-info {
+  padding: 8px 10px;
+}
+
+.face-card .face-name {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.face-card .face-count {
+  font-size: 11px;
+  color: var(--text2);
+}
+
+.face-name-edit {
+  background: var(--surface2);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 3px 6px;
+  font-size: 12px;
+  width: 100%;
+  outline: none;
+  text-align: center;
+}
+
+/* ── Loading ── */
+.loading {
+  text-align: center;
+  padding: 60px;
+  color: var(--text2);
+}
+
+.spinner {
+  width: 32px; height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 12px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .search-fields { flex-direction: column; }
+  .field input { width: 100%; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .lightbox-content { flex-direction: column; }
+  .lightbox-img { max-width: 95vw; max-height: 60vh; }
+  .lightbox-info { width: 95vw; }
+  .tab-bar { margin-left: 8px; gap: 2px; }
+  .tab-btn { padding: 6px 10px; font-size: 12px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span>Photo</span> Index</h1>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('photos')">Photos</button>
+    <button class="tab-btn" onclick="switchTab('faces')">Faces</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ═══ Photos Tab ═══ -->
+  <div class="tab-content active" id="tab-photos">
+
+    <!-- Stats -->
+    <div class="stats-panel" id="statsPanel">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+
+    <!-- Search -->
+    <div class="search-bar">
+      <form class="search-fields" id="searchForm" onsubmit="doSearch(); return false;">
+        <div class="field">
+          <label>Tag</label>
+          <input type="text" id="fTag" placeholder="person, dog..." autocomplete="off">
+          <div class="dropdown-list" id="ddTag"></div>
+        </div>
+        <div class="field">
+          <label>Camera</label>
+          <input type="text" id="fCamera" placeholder="ILCE-7M3..." autocomplete="off">
+          <div class="dropdown-list" id="ddCamera"></div>
+        </div>
+        <div class="field">
+          <label>Lens</label>
+          <input type="text" id="fLens" placeholder="50mm..." autocomplete="off">
+          <div class="dropdown-list" id="ddLens"></div>
+        </div>
+        <div class="field">
+          <label>Date</label>
+          <input type="text" id="fDate" placeholder="2024-07..." autocomplete="off">
+          <div class="dropdown-list" id="ddDate"></div>
+        </div>
+        <div class="field">
+          <label>Source</label>
+          <select id="fSource"><option value="">전체</option></select>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <div style="display:flex;gap:6px">
+            <button type="submit" class="btn btn-primary">검색</button>
+            <button type="button" class="btn btn-ghost" onclick="resetSearch()">초기화</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Results -->
+    <div class="results-info" id="resultsInfo"></div>
+    <div class="grid" id="grid"></div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <!-- ═══ Faces Tab ═══ -->
+  <div class="tab-content" id="tab-faces">
+    <div id="facesContent">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="if(event.target===this)closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+  <div class="lightbox-content">
+    <img class="lightbox-img" id="lbImg">
+    <div class="lightbox-info" id="lbInfo"></div>
+  </div>
+</div>
+
+<script>
+let currentPage = 1;
+let statsData = null;
+let filtersData = null;
+let currentLightboxPhoto = null;
+
+// ── Tab switching ──────────────────────────────────
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+  document.querySelector(`.tab-btn[onclick*="${tab}"]`).classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+
+  if (tab === 'faces') loadFaces();
+}
+
+// ── Filter dropdowns ───────────────────────────────
+
+async function loadFilters() {
+  const res = await fetch('/api/filters');
+  filtersData = await res.json();
+  setupDropdown('fTag', 'ddTag', filtersData.tags);
+  setupDropdown('fCamera', 'ddCamera', filtersData.cameras);
+  setupDropdown('fLens', 'ddLens', filtersData.lenses);
+  setupDropdown('fDate', 'ddDate', filtersData.dates.map(d => ({value: d, count: null})));
+
+  // Source dropdown
+  const sel = document.getElementById('fSource');
+  sel.innerHTML = '<option value="">전체</option>';
+  filtersData.sources.forEach(s => {
+    sel.innerHTML += `<option value="${s.value}">${s.value} (${s.count})</option>`;
+  });
+}
+
+function setupDropdown(inputId, ddId, items) {
+  const input = document.getElementById(inputId);
+  const dd = document.getElementById(ddId);
+
+  function renderItems(filter) {
+    const q = filter.toLowerCase();
+    const filtered = items.filter(it => it.value.toLowerCase().includes(q));
+    if (filtered.length === 0) { dd.classList.remove('open'); return; }
+    dd.innerHTML = filtered.slice(0, 30).map(it => {
+      const countStr = it.count != null ? `<span class="count">${it.count}</span>` : '';
+      return `<div class="dropdown-item" data-value="${it.value.replace(/"/g, '&quot;')}">${it.value}${countStr}</div>`;
+    }).join('');
+    dd.classList.add('open');
+  }
+
+  input.addEventListener('focus', () => renderItems(input.value));
+  input.addEventListener('input', () => renderItems(input.value));
+
+  dd.addEventListener('mousedown', (e) => {
+    const item = e.target.closest('.dropdown-item');
+    if (item) {
+      input.value = item.dataset.value;
+      dd.classList.remove('open');
+      doSearch();
+    }
+  });
+
+  input.addEventListener('blur', () => {
+    setTimeout(() => dd.classList.remove('open'), 150);
+  });
+}
+
+// ── Stats ──────────────────────────────────────────
+
+async function loadStats() {
+  const res = await fetch('/api/stats');
+  statsData = await res.json();
+  renderStats();
+}
+
+function renderStats() {
+  const s = statsData;
+  let html = `<div class="stats-row">
+    <div class="stat-item"><span class="stat-value">${s.total.toLocaleString()}</span><span class="stat-label">전체</span></div>
+    <div class="stat-item"><span class="stat-value">${s.tagged.toLocaleString()}</span><span class="stat-label">태그됨</span></div>
+    <div class="stat-item"><span class="stat-value">${s.untagged.toLocaleString()}</span><span class="stat-label">미태그</span></div>`;
+  s.sources.forEach(src => {
+    html += `<div class="stat-item"><span class="stat-value">${src.count.toLocaleString()}</span><span class="stat-label">${src.name}</span></div>`;
+  });
+  html += `</div>`;
+
+  if (s.top_tags.length) {
+    html += `<div class="tags-section"><h3>Tags</h3><div class="tag-cloud">`;
+    s.top_tags.forEach(t => {
+      html += `<button class="tag-chip" onclick="searchByTag('${t.tag}')">${t.tag}<span class="count">${t.count}</span></button>`;
+    });
+    html += `</div></div>`;
+  }
+
+  document.getElementById('statsPanel').innerHTML = html;
+}
+
+function searchByTag(tag) {
+  document.getElementById('fTag').value = tag;
+  doSearch();
+}
+
+function resetSearch() {
+  document.getElementById('fTag').value = '';
+  document.getElementById('fCamera').value = '';
+  document.getElementById('fLens').value = '';
+  document.getElementById('fDate').value = '';
+  document.getElementById('fSource').value = '';
+  currentPage = 1;
+  doSearch();
+}
+
+// ── Search ─────────────────────────────────────────
+
+async function doSearch(page) {
+  currentPage = page || 1;
+  const params = new URLSearchParams();
+  const tag = document.getElementById('fTag').value.trim();
+  const camera = document.getElementById('fCamera').value.trim();
+  const lens = document.getElementById('fLens').value.trim();
+  const date = document.getElementById('fDate').value.trim();
+  const source = document.getElementById('fSource').value;
+
+  if (tag) params.set('tag', tag);
+  if (camera) params.set('camera', camera);
+  if (lens) params.set('lens', lens);
+  if (date) params.set('date', date);
+  if (source) params.set('source', source);
+  params.set('page', currentPage);
+  params.set('per_page', 60);
+
+  document.getElementById('grid').innerHTML = '<div class="loading"><div class="spinner"></div>검색 중...</div>';
+  document.getElementById('resultsInfo').textContent = '';
+  document.getElementById('pagination').innerHTML = '';
+
+  const res = await fetch('/api/search?' + params);
+  const data = await res.json();
+  renderResults(data);
+}
+
+function searchByFaceCluster(clusterId, name) {
+  switchTab('photos');
+  document.getElementById('grid').innerHTML = '<div class="loading"><div class="spinner"></div>검색 중...</div>';
+  document.getElementById('resultsInfo').textContent = '';
+  document.getElementById('pagination').innerHTML = '';
+
+  const params = new URLSearchParams({face_cluster: clusterId, page: 1, per_page: 60});
+  fetch('/api/search?' + params).then(r => r.json()).then(data => {
+    document.getElementById('resultsInfo').textContent =
+      `${name || '미명명'} - ${data.total.toLocaleString()}개 결과`;
+    renderResults(data);
+  });
+}
+
+function renderResults(data) {
+  const grid = document.getElementById('grid');
+  const info = document.getElementById('resultsInfo');
+
+  if (data.total === 0) {
+    grid.innerHTML = '<div class="loading">결과 없음</div>';
+    info.textContent = '';
+    document.getElementById('pagination').innerHTML = '';
+    return;
+  }
+
+  if (!info.textContent) {
+    info.textContent = `${data.total.toLocaleString()}개 결과 (페이지 ${data.page}/${data.pages})`;
+  }
+
+  grid.innerHTML = data.results.map(r => {
+    const date = r.date_taken ? r.date_taken.substring(0, 10).replace(/:/g, '-') : '';
+    const allTags = r.tags.slice(0, 3).map(t => `<span>${t}</span>`).join('')
+      + (r.custom_tags || []).slice(0, 2).map(t => `<span class="custom">${t}</span>`).join('');
+    return `<div class="card" onclick='openLightbox(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
+      <img class="card-img" src="/thumb/${r.id}" loading="lazy" alt="${r.filename}">
+      <div class="card-body">
+        <div class="card-filename">${r.filename}</div>
+        <div class="card-meta">${date} · ${r.camera || ''}</div>
+        <div class="card-tags">${allTags}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Pagination
+  const pag = document.getElementById('pagination');
+  if (data.pages > 1) {
+    pag.innerHTML = `
+      <button ${data.page <= 1 ? 'disabled' : ''} onclick="doSearch(${data.page - 1})">← 이전</button>
+      <span class="page-info">${data.page} / ${data.pages}</span>
+      <button ${data.page >= data.pages ? 'disabled' : ''} onclick="doSearch(${data.page + 1})">다음 →</button>`;
+  } else {
+    pag.innerHTML = '';
+  }
+}
+
+// ── Lightbox ───────────────────────────────────────
+
+function openLightbox(photo) {
+  currentLightboxPhoto = photo;
+  const lb = document.getElementById('lightbox');
+  document.getElementById('lbImg').src = `/photo/${photo.id}`;
+  renderLightboxInfo(photo);
+  lb.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function renderLightboxInfo(photo) {
+  const date = photo.date_taken ? photo.date_taken.substring(0, 19).replace(/:/g, '-') : '-';
+  let gps = '';
+  if (photo.gps_lat && photo.gps_lon) {
+    gps = `<div class="info-row"><span class="label">GPS</span><span><a href="https://maps.google.com/?q=${photo.gps_lat},${photo.gps_lon}" target="_blank" style="color:var(--accent)">${photo.gps_lat.toFixed(5)}, ${photo.gps_lon.toFixed(5)}</a></span></div>`;
+  }
+
+  // YOLO tags (auto, read-only)
+  const autoTags = (photo.tags || []).map(t =>
+    `<span class="tag-pill auto">${t}</span>`
+  ).join('');
+
+  // Custom tags (editable)
+  const customTags = (photo.custom_tags || []).map(t =>
+    `<span class="tag-pill custom">${t}<button class="tag-remove" onclick="removeCustomTag(${photo.id}, '${t.replace(/'/g, "\\'")}')">×</button></span>`
+  ).join('');
+
+  document.getElementById('lbInfo').innerHTML = `
+    <h3>${photo.filename}</h3>
+    <div class="info-row"><span class="label">날짜</span><span>${date}</span></div>
+    <div class="info-row"><span class="label">카메라</span><span>${photo.camera || '-'}</span></div>
+    <div class="info-row"><span class="label">렌즈</span><span>${photo.lens || '-'}</span></div>
+    <div class="info-row"><span class="label">ISO</span><span>${photo.iso || '-'}</span></div>
+    <div class="info-row"><span class="label">소스</span><span>${photo.source_name || '-'}</span></div>
+    ${gps}
+
+    <div class="tag-section-title">Auto Tags</div>
+    <div class="info-tags">${autoTags || '<span style="color:var(--text2)">없음</span>'}</div>
+
+    <div class="tag-section-title">Custom Tags</div>
+    <div class="info-tags" id="customTagsArea">${customTags || '<span style="color:var(--text2)" id="noCustomTags">없음</span>'}</div>
+
+    <div class="tag-add-row">
+      <input type="text" id="newTagInput" placeholder="태그 입력..." onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomTag(${photo.id});}">
+      <button onclick="addCustomTag(${photo.id})">추가</button>
+    </div>
+
+    <div style="margin-top:16px;font-size:11px;color:var(--text2);word-break:break-all">${photo.filepath}</div>`;
+}
+
+async function addCustomTag(photoId) {
+  const input = document.getElementById('newTagInput');
+  const tag = input.value.trim();
+  if (!tag) return;
+  input.value = '';
+
+  const res = await fetch(`/api/photos/${photoId}/tags`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({tag}),
+  });
+  const data = await res.json();
+  if (data.custom_tags) {
+    currentLightboxPhoto.custom_tags = data.custom_tags;
+    renderLightboxInfo(currentLightboxPhoto);
+    document.getElementById('newTagInput').focus();
+  }
+}
+
+async function removeCustomTag(photoId, tag) {
+  const res = await fetch(`/api/photos/${photoId}/tags`, {
+    method: 'DELETE',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({tag}),
+  });
+  const data = await res.json();
+  if (data.custom_tags) {
+    currentLightboxPhoto.custom_tags = data.custom_tags;
+    renderLightboxInfo(currentLightboxPhoto);
+  }
+}
+
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('active');
+  document.body.style.overflow = '';
+  document.getElementById('lbImg').src = '';
+  currentLightboxPhoto = null;
+}
+
+// ── Faces Tab ──────────────────────────────────────
+
+let facesLoaded = false;
+
+async function loadFaces() {
+  const container = document.getElementById('facesContent');
+  if (!facesLoaded) {
+    container.innerHTML = '<div class="loading"><div class="spinner"></div>로딩 중...</div>';
+  }
+
+  const res = await fetch('/api/faces');
+  const clusters = await res.json();
+  facesLoaded = true;
+
+  if (clusters.length === 0) {
+    container.innerHTML = `<div class="loading">
+      얼굴 클러스터 없음<br>
+      <span style="font-size:13px;color:var(--text2)">photo-index scan-faces &lt;source&gt; 로 먼저 얼굴을 추출하세요</span>
+    </div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div style="margin-bottom:16px;color:var(--text2);font-size:13px">${clusters.length}개 인물 그룹</div>
+    <div class="faces-grid" id="facesGrid"></div>`;
+
+  const grid = document.getElementById('facesGrid');
+  grid.innerHTML = clusters.map(c => {
+    const name = c.name || '미명명';
+    const thumbSrc = c.rep_face_id ? `/face-thumb/${c.rep_face_id}` : '';
+    return `<div class="face-card" data-cluster-id="${c.id}">
+      <img src="${thumbSrc}" loading="lazy" alt="${name}" onclick="searchByFaceCluster(${c.id}, '${name.replace(/'/g, "\\'")}')">
+      <div class="face-info">
+        <div class="face-name" ondblclick="startRenameFace(this, ${c.id})" title="더블클릭하여 이름 변경">${name}</div>
+        <div class="face-count">${c.face_count}장</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function startRenameFace(el, clusterId) {
+  const currentName = el.textContent === '미명명' ? '' : el.textContent;
+  const input = document.createElement('input');
+  input.className = 'face-name-edit';
+  input.value = currentName;
+  input.placeholder = '이름 입력...';
+  el.replaceWith(input);
+  input.focus();
+  input.select();
+
+  async function save() {
+    const newName = input.value.trim();
+    await fetch(`/api/faces/${clusterId}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name: newName}),
+    });
+    const span = document.createElement('div');
+    span.className = 'face-name';
+    span.textContent = newName || '미명명';
+    span.setAttribute('ondblclick', `startRenameFace(this, ${clusterId})`);
+    span.title = '더블클릭하여 이름 변경';
+    input.replaceWith(span);
+  }
+
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { input.value = currentName; input.blur(); }
+  });
+}
+
+// ── Keyboard ───────────────────────────────────────
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeLightbox();
+});
+
+// Close dropdowns on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('.field')) {
+    document.querySelectorAll('.dropdown-list').forEach(d => d.classList.remove('open'));
+  }
+});
+
+// ── Init ───────────────────────────────────────────
+
+loadStats();
+loadFilters();
+doSearch();
+</script>
+</body>
+</html>
