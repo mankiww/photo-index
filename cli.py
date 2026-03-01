@@ -11,6 +11,10 @@
   photo-index faces                   얼굴 클러스터 목록
   photo-index search [옵션]           검색
   photo-index status                  통계
+  photo-index web start               웹서버 시작
+  photo-index web stop                웹서버 중지
+  photo-index web restart             웹서버 재시작
+  photo-index web status              웹서버 상태 확인
 """
 
 import argparse
@@ -250,6 +254,61 @@ def scan_path(db, path, source_name=None):
             print(f"  DB 오류: {e}", file=sys.stderr)
 
     print(f"\n완료: 신규 {indexed} / 스킵 {skipped} / 에러 {errors} / 전체 {total}")
+
+    if indexed > 0:
+        apply_schedule_tags(db)
+
+
+def apply_schedule_tags(db):
+    """기존 스케줄에 매칭되는 사진에 자동 태그 적용"""
+    # schedules 테이블이 없으면 스킵
+    has_table = db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='schedules'"
+    ).fetchone()
+    if not has_table:
+        return
+
+    schedules = db.execute("SELECT * FROM schedules").fetchall()
+    if not schedules:
+        return
+
+    total_tagged = 0
+    for s in schedules:
+        date_like = s["date"].replace("-", ":") + "%"
+        conditions = ["date_taken LIKE ?"]
+        params = [date_like]
+
+        if s["time_start"] and s["time_end"]:
+            conditions.append("substr(date_taken, 12, 5) >= ?")
+            conditions.append("substr(date_taken, 12, 5) <= ?")
+            params.extend([s["time_start"], s["time_end"]])
+        elif s["time_start"]:
+            conditions.append("substr(date_taken, 12, 5) >= ?")
+            params.append(s["time_start"])
+        elif s["time_end"]:
+            conditions.append("substr(date_taken, 12, 5) <= ?")
+            params.append(s["time_end"])
+
+        where = " AND ".join(conditions)
+        rows = db.execute(f"SELECT id, custom_tags FROM photos WHERE {where}", params).fetchall()
+
+        count = 0
+        for r in rows:
+            tags = json.loads(r["custom_tags"] or "[]")
+            if s["title"] not in tags:
+                tags.append(s["title"])
+                db.execute("UPDATE photos SET custom_tags=? WHERE id=?",
+                           (json.dumps(tags, ensure_ascii=False), r["id"]))
+                count += 1
+
+        if count > 0:
+            db.execute("UPDATE schedules SET tagged_count=tagged_count+? WHERE id=?", (count, s["id"]))
+            total_tagged += count
+
+    if total_tagged > 0:
+        db.commit()
+        print(f"\n스케줄 자동태깅: {total_tagged}장에 태그 추가됨")
+
 
 # ── 얼굴 감지/임베딩 ─────────────────────────────────
 
@@ -602,6 +661,92 @@ def cmd_status(args):
         for tag, count in top:
             print(f"  {tag:20s}: {count}개")
 
+# ── 웹서버 관리 ──────────────────────────────────────
+
+WEB_DIR = Path(os.environ.get("PHOTO_INDEX_WEB_DIR", Path.home() / "photo-indexer-web"))
+WEB_SCREEN = "photo-web"
+WEB_PORT = int(os.environ.get("PHOTO_INDEX_WEB_PORT", "5555"))
+
+
+def _web_is_running():
+    """screen 세션 + 포트 리스닝 확인"""
+    try:
+        result = subprocess.run(
+            ["screen", "-ls"], capture_output=True, text=True
+        )
+        if WEB_SCREEN not in result.stdout:
+            return False
+        # 포트 확인
+        result2 = subprocess.run(
+            ["ss", "-tlnp"], capture_output=True, text=True
+        )
+        return f":{WEB_PORT}" in result2.stdout
+    except Exception:
+        return False
+
+
+def cmd_web(args):
+    action = args.action
+
+    if action == "start":
+        if _web_is_running():
+            print(f"웹서버가 이미 실행 중입니다 (http://localhost:{WEB_PORT})")
+            return
+
+        app_py = WEB_DIR / "app.py"
+        if not app_py.exists():
+            print(f"오류: {app_py} 파일을 찾을 수 없습니다.", file=sys.stderr)
+            sys.exit(1)
+
+        python = sys.executable
+        subprocess.run([
+            "screen", "-dmS", WEB_SCREEN,
+            python, str(app_py),
+        ], cwd=str(WEB_DIR))
+
+        # 시작 대기
+        for _ in range(10):
+            time.sleep(0.5)
+            if _web_is_running():
+                break
+
+        if _web_is_running():
+            print(f"웹서버 시작됨: http://localhost:{WEB_PORT}")
+        else:
+            print("웹서버 시작 실패. 로그를 확인하세요.", file=sys.stderr)
+            sys.exit(1)
+
+    elif action == "stop":
+        if not _web_is_running():
+            print("웹서버가 실행 중이 아닙니다.")
+            return
+
+        subprocess.run(["screen", "-S", WEB_SCREEN, "-X", "quit"])
+        time.sleep(1)
+        print("웹서버 중지됨")
+
+    elif action == "restart":
+        if _web_is_running():
+            subprocess.run(["screen", "-S", WEB_SCREEN, "-X", "quit"])
+            time.sleep(1)
+            print("기존 서버 중지됨")
+
+        # start 로직 재사용
+        args.action = "start"
+        cmd_web(args)
+
+    elif action == "status":
+        if _web_is_running():
+            print(f"웹서버 실행 중: http://localhost:{WEB_PORT}")
+        else:
+            print("웹서버 중지 상태")
+
+    else:
+        print(f"알 수 없는 액션: {action}", file=sys.stderr)
+        print("사용법: photo-index web [start|stop|restart|status]")
+        sys.exit(1)
+
+
 # ── 메인 ──────────────────────────────────────────────
 
 def main():
@@ -649,6 +794,11 @@ def main():
     # status
     sub.add_parser("status", help="통계")
 
+    # web
+    p_web = sub.add_parser("web", help="웹서버 관리 (start/stop/restart/status)")
+    p_web.add_argument("action", choices=["start", "stop", "restart", "status"],
+                        help="start: 시작, stop: 중지, restart: 재시작, status: 상태확인")
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -665,6 +815,7 @@ def main():
         "faces": cmd_faces,
         "search": cmd_search,
         "status": cmd_status,
+        "web": cmd_web,
     }
     commands[args.command](args)
 
