@@ -93,10 +93,11 @@ def api_filters():
         "SELECT camera as value, COUNT(*) as count FROM photos WHERE camera != '' GROUP BY camera ORDER BY count DESC"
     ).fetchall()
 
-    # Lenses
+    # Lenses (+ 렌즈 없음)
     lenses = db.execute(
         "SELECT lens as value, COUNT(*) as count FROM photos WHERE lens != '' GROUP BY lens ORDER BY count DESC"
     ).fetchall()
+    no_lens_count = db.execute("SELECT COUNT(*) as c FROM photos WHERE lens = '' OR lens IS NULL").fetchone()["c"]
 
     # Sources
     sources = db.execute(
@@ -112,7 +113,8 @@ def api_filters():
     return jsonify({
         "tags": [{"value": t, "count": c} for t, c in tags],
         "cameras": [{"value": r["value"], "count": r["count"]} for r in cameras],
-        "lenses": [{"value": r["value"], "count": r["count"]} for r in lenses],
+        "lenses": [{"value": r["value"], "count": r["count"]} for r in lenses]
+                 + ([{"value": "(렌즈 없음)", "count": no_lens_count}] if no_lens_count else []),
         "sources": [{"value": r["value"], "count": r["count"]} for r in sources],
         "dates": [r["ym"] for r in date_rows if r["ym"]],
     })
@@ -143,8 +145,11 @@ def api_search():
         conditions.append("camera LIKE ?")
         params.append(f"%{camera}%")
     if lens:
-        conditions.append("lens LIKE ?")
-        params.append(f"%{lens}%")
+        if lens == "(렌즈 없음)":
+            conditions.append("(lens = '' OR lens IS NULL)")
+        else:
+            conditions.append("lens LIKE ?")
+            params.append(f"%{lens}%")
     if date:
         conditions.append("date_taken LIKE ?")
         params.append(f"{date.replace('-', ':')}%")
@@ -243,6 +248,30 @@ def remove_tag(photo_id):
 
     db.close()
     return jsonify({"custom_tags": tags})
+
+
+@app.route("/api/photos/<int:photo_id>/yolo-tags", methods=["DELETE"])
+def remove_yolo_tag(photo_id):
+    db = get_db()
+    row = db.execute("SELECT yolo_tags FROM photos WHERE id=?", (photo_id,)).fetchone()
+    if not row:
+        db.close()
+        abort(404)
+
+    data = request.get_json()
+    tag = (data.get("tag") or "").strip()
+    if not tag:
+        db.close()
+        return jsonify({"error": "tag is required"}), 400
+
+    tags = json.loads(row["yolo_tags"] or "[]")
+    if tag in tags:
+        tags.remove(tag)
+        db.execute("UPDATE photos SET yolo_tags=? WHERE id=?", (json.dumps(tags, ensure_ascii=False), photo_id))
+        db.commit()
+
+    db.close()
+    return jsonify({"tags": tags})
 
 
 # ── Tags list ────────────────────────────────────────
