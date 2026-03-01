@@ -14,6 +14,7 @@ photo-indexer-env/
 *.db
 *.db-wal
 *.db-shm
+!sample_data/sample.db
 
 # YOLO model
 *.pt
@@ -27,6 +28,9 @@ photo-indexer-env/
 
 # Config (may contain local paths)
 .photo-indexer.conf
+
+# Build scripts (local only)
+prepare_sample.py
 
 # Environment
 .env

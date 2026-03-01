@@ -1,0 +1,6 @@
+flask>=3.0
+Pillow>=10.0
+ultralytics>=8.0
+deepface>=0.0.90
+scikit-learn>=1.3
+tf-keras>=2.16

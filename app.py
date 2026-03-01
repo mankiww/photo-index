@@ -12,9 +12,30 @@ from flask import Flask, request, jsonify, send_file, abort
 
 app = Flask(__name__, static_folder="static")
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
-DB_PATH = Path(os.environ.get("PHOTO_INDEX_DB", Path.home() / ".photo-indexer.db"))
-THUMB_DIR = Path(os.environ.get("PHOTO_INDEX_THUMBS", Path.home() / ".photo-indexer-thumbs"))
-FACE_THUMB_DIR = Path(os.environ.get("PHOTO_INDEX_FACE_THUMBS", Path.home() / ".photo-indexer-face-thumbs"))
+
+DEMO_MODE = os.environ.get("DEMO_MODE", "").lower() in ("1", "true", "yes")
+
+if DEMO_MODE:
+    _base = Path(__file__).parent / "sample_data"
+    DB_PATH = _base / "sample.db"
+    THUMB_DIR = _base / "thumbs"
+    FACE_THUMB_DIR = _base / "face-thumbs"
+    SAMPLE_PHOTO_ROOT = _base
+else:
+    DB_PATH = Path(os.environ.get("PHOTO_INDEX_DB", Path.home() / ".photo-indexer.db"))
+    THUMB_DIR = Path(os.environ.get("PHOTO_INDEX_THUMBS", Path.home() / ".photo-indexer-thumbs"))
+    FACE_THUMB_DIR = Path(os.environ.get("PHOTO_INDEX_FACE_THUMBS", Path.home() / ".photo-indexer-face-thumbs"))
+    SAMPLE_PHOTO_ROOT = None
+
+
+def resolve_photo_path(filepath):
+    """DB의 filepath를 실제 파일 경로로 변환"""
+    p = Path(filepath)
+    if p.is_absolute():
+        return p
+    if SAMPLE_PHOTO_ROOT:
+        return SAMPLE_PHOTO_ROOT / filepath
+    return p
 
 
 def get_db():
@@ -263,8 +284,18 @@ def api_search():
 
 # ── Tags CRUD ────────────────────────────────────────
 
+def demo_readonly():
+    """DEMO_MODE에서 쓰기 요청 차단"""
+    if DEMO_MODE:
+        return jsonify({"error": "Demo mode: read-only"}), 403
+    return None
+
+
 @app.route("/api/photos/<int:photo_id>/tags", methods=["POST"])
 def add_tag(photo_id):
+    blocked = demo_readonly()
+    if blocked:
+        return blocked
     db = get_db()
     row = db.execute("SELECT custom_tags FROM photos WHERE id=?", (photo_id,)).fetchone()
     if not row:
@@ -289,6 +320,9 @@ def add_tag(photo_id):
 
 @app.route("/api/photos/<int:photo_id>/tags", methods=["DELETE"])
 def remove_tag(photo_id):
+    blocked = demo_readonly()
+    if blocked:
+        return blocked
     db = get_db()
     row = db.execute("SELECT custom_tags FROM photos WHERE id=?", (photo_id,)).fetchone()
     if not row:
@@ -313,6 +347,9 @@ def remove_tag(photo_id):
 
 @app.route("/api/photos/<int:photo_id>/yolo-tags", methods=["DELETE"])
 def remove_yolo_tag(photo_id):
+    blocked = demo_readonly()
+    if blocked:
+        return blocked
     db = get_db()
     row = db.execute("SELECT yolo_tags FROM photos WHERE id=?", (photo_id,)).fetchone()
     if not row:
@@ -414,6 +451,9 @@ def api_face_cluster(cluster_id):
 @app.route("/api/faces/<int:cluster_id>", methods=["PUT"])
 def rename_face_cluster(cluster_id):
     """클러스터 이름 변경"""
+    blocked = demo_readonly()
+    if blocked:
+        return blocked
     db = get_db()
     cluster = db.execute("SELECT id FROM face_clusters WHERE id=?", (cluster_id,)).fetchone()
     if not cluster:
@@ -441,7 +481,7 @@ def serve_face_thumb(face_id):
     if not face:
         abort(404)
 
-    p = Path(face["filepath"])
+    p = resolve_photo_path(face["filepath"])
     if not p.exists():
         abort(404)
 
@@ -490,7 +530,7 @@ def serve_photo(photo_id):
     db.close()
     if not row:
         abort(404)
-    p = Path(row["filepath"])
+    p = resolve_photo_path(row["filepath"])
     if not p.exists():
         abort(404)
     return send_file(p)
@@ -503,7 +543,7 @@ def serve_thumb(photo_id):
     db.close()
     if not row:
         abort(404)
-    p = Path(row["filepath"])
+    p = resolve_photo_path(row["filepath"])
     if not p.exists():
         abort(404)
 
@@ -569,6 +609,9 @@ def api_schedules():
 
 @app.route("/api/schedules", methods=["POST"])
 def create_schedule():
+    blocked = demo_readonly()
+    if blocked:
+        return blocked
     data = request.get_json()
     title = (data.get("title") or "").strip()
     date = (data.get("date") or "").strip()
@@ -592,6 +635,9 @@ def create_schedule():
 
 @app.route("/api/schedules/<int:sid>", methods=["PUT"])
 def update_schedule(sid):
+    blocked = demo_readonly()
+    if blocked:
+        return blocked
     db = get_db()
     old = db.execute("SELECT * FROM schedules WHERE id=?", (sid,)).fetchone()
     if not old:
@@ -627,6 +673,9 @@ def update_schedule(sid):
 
 @app.route("/api/schedules/<int:sid>", methods=["DELETE"])
 def delete_schedule(sid):
+    blocked = demo_readonly()
+    if blocked:
+        return blocked
     db = get_db()
     row = db.execute("SELECT * FROM schedules WHERE id=?", (sid,)).fetchone()
     if not row:
@@ -645,6 +694,9 @@ def delete_schedule(sid):
 
 @app.route("/api/schedules/<int:sid>/auto-tag", methods=["POST"])
 def retag_schedule(sid):
+    blocked = demo_readonly()
+    if blocked:
+        return blocked
     db = get_db()
     row = db.execute("SELECT * FROM schedules WHERE id=?", (sid,)).fetchone()
     if not row:
